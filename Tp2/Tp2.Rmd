@@ -1,0 +1,239 @@
+---
+title: "Proyecto I"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+microdatos = read.csv('evyth_microdatos.csv')
+dict = read.csv('significado.csv')
+library(dplyr)
+library(ggplot2)
+library(knitr)
+```
+<p align="center">
+  <img src="https://th.bing.com/th/id/R.c52f44604bcc25bc77b7f56ee5aba10d?rik=4RLMM/VwEPVQxQ&pid=ImgRaw&r=0" alt="Image" width="200">
+</p>
+
+<h2 align="center">TP2- ITBA Relevamiento y análisis de Bases de datos</h2>
+<br/><br/><br/><br/>
+
+Profesoras:
+
+Bouret, María Gabriela
+
+Peralta Ramos, Angélica
+<br/><br/>
+<br/><br/>
+
+
+Ian Dalton - 62345
+<br/><br/><br/><br/>
+
+
+Fecha de entrega: 17/4/23
+
+
+
+
+\newpage
+
+```{r include=FALSE}
+  inicio = as.integer(min(microdatos[,"anio"]))
+  fin = as.integer(max(microdatos[,"anio"]))
+```
+
+<h2 align="center"><u>Ficha del dataset</u></h2>
+
+**Nombre del dataset: **microdatos evyth
+
+**Fuente: **[Ministerio de Turismo y Deportes](https://datos.gob.ar/dataset/turismo-encuesta-viajes-turismo-hogares-evyth)
+
+**Rango de fechas: **
+
+Desde: 1/1/`r inicio`
+
+Hasta: 31/12/`r fin`
+
+**Cantidad de filas: **`r nrow(microdatos)`
+
+**Frecuencia de actualización: ** Trimestral
+
+**Problemas en la base: ** 
+- No tiene fechas especificas lo cual limita un poco el analisis para ver en que periodos va la gente
+
+- La fecha de actualizacion de la pagina es del 6 de octubre de 2021 y tiene datos del cuarto trimestre de 2022.
+
+**Potencial de esta base: ** 
+- Tiene un monton de preguntas que se hacen, desde cosas basicas como de donde vienen y a donde van hasta si contrataron un paquete de viaje y que cosas incluye
+
+- Se podria analizar los medios de transporte o porque estan haciendo este viaje
+
+- Tiene mucha informacion de que cosas hace en el viaje asi que se pueden hacer un monton de preguntas
+
+**Breve descripción: **Es una base de datos que recopila de manera trimestral las respuestas de las encuestas que la gente responde al viajar
+
+**Preguntas a hacer a la base: ** 
+- Que tanto se usa internet para organizar el viaje (reservas, etc.)
+
+- Cuales son los destinos mas visitados, cual es el motivo y que medios de transporte usan
+
+- Que influencio la decision de visitar el destino?
+
+- Que tan seguido visitan el destino
+
+- Que tipos de actividades se realizan en el destino
+
+- Como la paso en el destino, cuales son los mejores y peores destinos filtrando por motivo (mejores lugares religiosos, turisticos, etc.)
+
+- Mostrar la calidad promedio de en las provincias (se podria hacer un top mejores y peores):
+
+  - Gastronomia
+  
+  - Alojamiento
+  
+  - Informacion turistica
+  
+  - Higiene
+  
+  - Seguridad
+  
+  - Transporte (filtrando por tipo de transporte)
+  
+- Tamaño de la familia del que viaja
+
+- Edad promedio de la gente que responde la encuesta en relacion al destino que visita.
+
+- Nivel educativo de lugar que se visita y de donde viene
+
+- Nivel educativo y cobertura de salud
+
+- Cobertura de salud y destino/origen
+
+- Si la gente que no va por motivo religioso realiza una actividad religiosa
+
+- Preparacion promedio que se le dedica para ir al destino
+
+- Preparacion promedio que se e dedica filtrado por motivo
+
+- Nivel educativo por tipo de alojamiento
+
+- Duracion estadia por destino
+
+- Duracion estadia por nivel educativo
+
+- Duracion estadia por estado laboral
+  
+
+**Pedido de información: **
+- Se podria pedir que den informacion un poco mas detallada y que sea por dia/por semana para que no den informacion que pueda identificar a nadie.
+
+- Actualizar los datos para incluir el primer trimestre de 2023 para analizar los viajes post-pandemia
+
+
+
+
+\newpage
+
+<h2 align="center"><u>Conclusiones</u></h2>
+```{r vars, include=FALSE}
+destinos = dict %>%
+  filter(variable == 'provincia_destino')%>%
+  na.exclude(opcion)
+motivos = dict %>%
+  filter(variable == 'px10_1')%>%
+  na.exclude(opcion)
+
+generar_top = function(db,columna,nombre_columna,dict=dict,cantidad=5){
+  str_columna = deparse(substitute(columna))
+  
+  filtro = dict %>%
+    filter(variable == str_columna)%>%
+    na.exclude(opcion)
+  datos = db %>%
+    group_by({{columna}})%>%
+    summarise(Cantidad = n()) %>%
+    inner_join(y=filtro,by= setNames("opcion",str_columna))%>%
+    mutate(variable=NULL,
+           columna=NULL)%>%
+    select(descripcion,Cantidad)%>%
+    rename(!!nombre_columna :=descripcion)%>%
+    arrange(desc(Cantidad))%>%
+    top_n(5,Cantidad)%>%
+    kable()
+  return(datos)
+}
+```
+
+
+```{r consultas, include=FALSE}
+
+filtro = microdatos %>%
+  inner_join(y= dict[dict$variable=='provincia_destino',], by=c('provincia_destino'="opcion"))%>%
+  group_by(anio,provincia_destino,descripcion)%>%
+  summarise(Cantidad = n())
+cantidad_respuestas = ggplot(filtro,aes(x=anio,y=Cantidad,color=descripcion))+geom_line(linewidth=1)
+
+filtro_porcentaje_destinos = microdatos %>%
+  inner_join(y= dict[dict$variable=='provincia_destino',], by=c('provincia_destino'="opcion"))%>%
+  group_by(descripcion)%>%
+  summarise(Porcentaje=100*n()/nrow(microdatos)) %>%
+  arrange(desc(Porcentaje))
+porcentaje_destinos = ggplot(filtro_porcentaje_destinos,aes(x="",y=Porcentaje,fill=descripcion))+ geom_col(color = "black")+coord_polar("y", start = 0)
+
+Viajes_Trimestre = microdatos %>%
+  group_by(trimestre)%>%
+  summarise(Cantidad=n(),Porcentaje=100*n()/nrow(microdatos))%>%
+  arrange(desc(Cantidad))
+  
+porcentaje_trimestres = ggplot(Viajes_Trimestre,aes(x="",y=Porcentaje,fill=as.factor(trimestre))) + geom_col(color = 'black') +
+  geom_label(aes(label = paste(floor(Porcentaje),'%',sep='')),
+             position = position_stack(vjust = 0.5),
+             show.legend = FALSE) +
+  coord_polar(theta = "y")
+
+```
+
+**General**
+
+- **Los 5 destinos mas grandes fueron:**
+
+  - Se puede ver que Buenos Aires (no CABA ni GBA) es uno de los principales destinos turisticos
+`r generar_top(microdatos,provincia_destino,'Destinos',dict)`
+ 
+
+- **El principal motivo de visita:**
+
+  - Hay bastante viaje por razones de salud, seria interesante analizar despues el resultado de esos viajes
+  
+`r generar_top(microdatos,px10_1,'Motivos',dict)`
+
+- **Cantidad de gente que respondio la encuesta a lo largo del tiempo**
+
+  - Pareciera que hay una tendiente de bajada general del turismo, se necesitaria un analisis mas profundo para afirmarlo
+  
+```{r}
+cantidad_respuestas
+```
+  
+- **% de los destinos:**
+
+```{r}
+porcentaje_destinos
+```
+
+`r filtro_porcentaje_destinos %>%  kable()`
+
+- **Cual es el trimestre del año en donde hay mas viajes?**
+ 
+  - El trimestre `r Viajes_Trimestre[1,1]` es el que tiene mas viajes, con un total de `r Viajes_Trimestre[1,2]` viajes
+  
+```{r}
+porcentaje_trimestres
+```
+
+
+
+
